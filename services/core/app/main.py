@@ -28,3 +28,12 @@ def health():
     log("health_check")
     return {"status": "ok", "service": SERVICE, "env": ENV, "log_mode": LOG_MODE}
 # END_FILE
+
+
+@app.get("/version")
+def version():
+    return {
+        "service": "core",
+        "version": "0.1.0-dev",
+        "build": "local",
+    }

@@ -28,3 +28,12 @@ def health():
     log("health_check", data_dir=DATA_DIR)
     return {"status": "ok", "service": SERVICE, "env": ENV, "data_dir": DATA_DIR}
 # END_FILE
+
+
+@app.get("/version")
+def version():
+    return {
+        "service": "content",
+        "version": "0.1.0-dev",
+        "build": "local",
+    }
