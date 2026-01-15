@@ -1,0 +1,54 @@
+Отчет: найденные ошибки/несоответствия и рекомендации по исправлению
+
+1) Несовпадение порта content-сервиса между nginx и docker-compose
+- Где:
+  - infra/nginx/dev.conf: proxy_pass http://content:8000/;
+  - docker-compose.yml: content запускается на порту 8001 (uvicorn --port 8001).
+- Симптом:
+  - Запросы к /content/* через gateway будут падать (502/timeout), так как nginx проксирует на несуществующий порт.
+- Как исправить:
+  - Вариант A (рекомендуется): привести nginx к фактическому порту сервиса — заменить на proxy_pass http://content:8001/.
+  - Вариант B: изменить запуск content на порт 8000 и скорректировать healthcheck/прочие ссылки.
+
+2) Несогласованность переменной окружения для env в core
+- Где:
+  - services/core/app/main.py использует os.getenv("APP_ENV", "dev")
+  - docker-compose.yml передает ENV=${ENV:-dev} (не APP_ENV) для core.
+- Симптом:
+  - /health у core всегда показывает env=dev, даже если ENV задан иначе.
+- Как исправить:
+  - Вариант A: заменить в core чтение на ENV (os.getenv("ENV", "dev")).
+  - Вариант B: изменить docker-compose.yml и передавать APP_ENV.
+
+3) Контрольный /version отсутствует в core (требование Block 1)
+- Где:
+  - docs/01-index/NEXT-STEPS-ROADMAP.md: в Block 1 указан /version для core/content.
+  - services/content/app/main.py уже имеет /version.
+  - services/core/app/main.py /version отсутствует.
+- Симптом:
+  - Несоответствие требованиям Roadmap: smoke/контракты блок 1 неполны.
+- Как исправить:
+  - Добавить эндпоинт /version в core (по аналогии с content) и включить в smoke, когда понадобится.
+
+4) Документационная несогласованность: ARCHITECTURE-INDEX указывает content:8000
+- Где:
+  - docs/01-index/ARCHITECTURE-INDEX.machine.md: “infra/nginx/dev.conf: routes /health, /api/*, /content/*” и фактический proxy на 8000.
+  - docker-compose.yml запускает content на 8001.
+- Симптом:
+  - Документация отражает один порт, фактическая конфигурация — другой.
+- Как исправить:
+  - После исправления пункта (1) синхронизировать документацию: обновить port в ARCHITECTURE-INDEX (если упоминается), либо уточнить где именно фиксируется port.
+
+5) Лишний маркер # END_FILE внутри services/content/app/main.py
+- Где:
+  - services/content/app/main.py содержит # END_FILE перед /version.
+- Симптом:
+  - Непоследовательность в структуре файла (маркер завершения не в конце).
+- Как исправить:
+  - Переместить # END_FILE в конец файла или убрать, если это неформальный маркер.
+
+Итог:
+- Критичный баг: пункт (1) — прокси на неверный порт.
+- Конфигурационная ошибка: пункт (2).
+- Несоответствия roadmap/доков: пункты (3)-(4).
+- Косметическая/структурная проблема: пункт (5).
