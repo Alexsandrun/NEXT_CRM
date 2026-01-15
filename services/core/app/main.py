@@ -1,39 +1,21 @@
-from fastapi import FastAPI
+from __future__ import annotations
+
 import os
-import time
-import json
+from fastapi import FastAPI
 
-app = FastAPI(title="nextcrm-core", version="0.0.1")
+from app.api.router import api_router
 
-SERVICE = os.getenv("SERVICE_NAME", "core")
-ENV = os.getenv("ENV", "dev")
-LOG_MODE = os.getenv("LOG_MODE", "normal")
-
-
-def log(event: str, **fields):
-    payload = {
-        "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "level": "INFO",
-        "service": SERVICE,
-        "env": ENV,
-        "event": event,
-        "trace_id": fields.pop("trace_id", None),
-        **fields,
-    }
-    print(json.dumps(payload, ensure_ascii=False), flush=True)
-
+app = FastAPI(title="NEXT_CRM Core", version="0.1.0-dev")
 
 @app.get("/health")
 def health():
-    log("health_check")
-    return {"status": "ok", "service": SERVICE, "env": ENV, "log_mode": LOG_MODE}
-# END_FILE
-
-
-@app.get("/version")
-def version():
     return {
+        "status": "ok",
         "service": "core",
-        "version": "0.1.0-dev",
-        "build": "local",
+        "env": os.getenv("APP_ENV", "dev"),
+        "log_mode": os.getenv("LOG_MODE", "normal"),
     }
+
+# core internal routes (no /api prefix here; gateway strips /api/)
+app.include_router(api_router)
+# END_FILE
