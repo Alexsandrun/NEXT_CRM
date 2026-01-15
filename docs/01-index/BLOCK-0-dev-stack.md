@@ -18,8 +18,8 @@ Bring up a reproducible local dev environment where:
 - Docker Compose (dev) with services: gateway, core, content, runner, postgres, redis
 - Basic config via `.env`
 - Health endpoints for services
-- DB migrations mechanism bootstrap (can be empty initially)
-- Logging baseline: JSON logs with `service`, `event`, `ts`, `level` (+ `trace_id` field placeholder)
+- Migrations mechanism hook (can be minimal initially)
+- Logging baseline: JSON logs with `service`, `event`, `ts`, `level` (+ `trace_id` placeholder)
 - Minimal network layout (internal docker network)
 
 ## Out of Scope
@@ -30,11 +30,11 @@ Bring up a reproducible local dev environment where:
 - UI
 
 ## Deliverables
-- docker-compose.yml (dev)
-- .env.example
-- services skeletons with /health
+- `docker-compose.yml` (dev)
+- `.env.example`
+- service skeletons with `/health`
 - migrations mechanism hook
-- scripts/smoke.sh
+- `scripts/smoke.sh`
 
 ## Definition of Done
 - `docker compose up -d` starts all containers

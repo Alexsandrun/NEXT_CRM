@@ -1,6 +1,6 @@
 # PROJECT FOCUS: Next_CRM / Nexus Business OS
 
-## MEMORY RULESET (Dev Canon)
+## Memory Ruleset (Dev Canon)
 - Canonical docs entrypoint: `docs/01-index/ARCHITECTURE-INDEX.machine.md` (always consult before coding).
 - Canon > Code: if conflict, docs win; architecture changes require updating docs + adding ADR in `docs/01-index/ADR-LOG.md`.
 - Follow implementation order: `docs/01-index/NEXT-STEPS-ROADMAP.md` (Sprint 0..8).
