@@ -1,31 +1,55 @@
 from __future__ import annotations
 
-from pydantic import BaseModel
 import os
+from dataclasses import dataclass
 
 
-class Settings(BaseModel):
-    # env
-    env: str = os.getenv("ENV", "dev")
-    log_mode: str = os.getenv("LOG_MODE", "normal")
+def _env(name: str, default: str = "") -> str:
+    v = os.getenv(name)
+    return v if v is not None and v != "" else default
 
-    # database
-    database_url: str = os.getenv(
-        "DATABASE_URL",
-        "postgresql+asyncpg://nextcrm:nextcrm@postgres:5432/nextcrm",
+
+@dataclass(frozen=True)
+class Settings:
+    env: str
+    log_mode: str
+    app_version: str
+
+    pg_host: str
+    pg_port: int
+    pg_db: str
+    pg_user: str
+    pg_password: str
+
+    @property
+    def database_url(self) -> str:
+        # SQLAlchemy async DSN
+        return f"postgresql+asyncpg://{self.pg_user}:{self.pg_password}@{self.pg_host}:{self.pg_port}/{self.pg_db}"
+
+
+def get_settings() -> Settings:
+    # Prefer APP_ENV, fallback to ENV (fix drift)
+    env = _env("APP_ENV", _env("ENV", "dev"))
+    log_mode = _env("LOG_MODE", "normal")
+    app_version = _env("APP_VERSION", "0.1.0-dev")
+
+    # Defaults should match docker-compose env; override via env if needed
+    pg_host = _env("POSTGRES_HOST", "postgres")
+    pg_port = int(_env("POSTGRES_PORT", "5432"))
+    pg_db = _env("POSTGRES_DB", "nextcrm")
+    pg_user = _env("POSTGRES_USER", "nextcrm")
+    pg_password = _env("POSTGRES_PASSWORD", "nextcrm")
+
+    return Settings(
+        env=env,
+        log_mode=log_mode,
+        app_version=app_version,
+        pg_host=pg_host,
+        pg_port=pg_port,
+        pg_db=pg_db,
+        pg_user=pg_user,
+        pg_password=pg_password,
     )
 
-    # auth
-    jwt_secret: str = os.getenv("JWT_SECRET", "dev-insecure-change-me")
-    jwt_issuer: str = os.getenv("JWT_ISSUER", "nextcrm")
-    jwt_audience: str = os.getenv("JWT_AUDIENCE", "nextcrm")
-    jwt_ttl_seconds: int = int(os.getenv("JWT_TTL_SECONDS", "3600"))
 
-    # bootstrap
-    bootstrap_enabled: bool = os.getenv("BOOTSTRAP_ENABLED", "1") == "1"
-    bootstrap_tenant_slug: str = os.getenv("BOOTSTRAP_TENANT_SLUG", "demo")
-    bootstrap_admin_email: str = os.getenv("BOOTSTRAP_ADMIN_EMAIL", "admin@demo.local")
-    bootstrap_admin_password: str = os.getenv("BOOTSTRAP_ADMIN_PASSWORD", "admin123")
-
-
-settings = Settings()
+settings = get_settings()

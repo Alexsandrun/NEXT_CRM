@@ -1,34 +1,72 @@
 from __future__ import annotations
 
+import uuid
+from typing import Optional
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..models.tenancy import Tenant
-from ..models.identity import User
-from ..security.passwords import verify_password
-from ..security.jwt_tokens import issue_token
+from app.db import get_db
+from app.models import User
+from app.security import create_session, verify_password
+
+router = APIRouter()
 
 
-async def authenticate(
-    db: AsyncSession, *, tenant_slug: str, email: str, password: str
-) -> tuple[str | None, dict | None]:
-    tenant = (await db.execute(select(Tenant).where(Tenant.slug == tenant_slug))).scalar_one_or_none()
-    if tenant is None:
-        return None, {"code": "AUTH.INVALID_TENANT", "message": "Unknown tenant.", "retryable": False}
+class LoginRequest(BaseModel):
+    tenant: str
+    email: str
+    password: str
 
-    user = (
-        await db.execute(
-            select(User).where(User.tenant_id == tenant.id, User.email == email.lower())
-        )
-    ).scalar_one_or_none()
-    if user is None:
-        return None, {"code": "AUTH.INVALID_CREDENTIALS", "message": "Invalid credentials.", "retryable": False}
 
-    if not user.is_active or user.is_locked:
-        return None, {"code": "AUTH.USER_LOCKED", "message": "User is locked or inactive.", "retryable": False}
+@router.post("/auth/login")
+async def login(payload: LoginRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    # ищем активного юзера в tenant
+    q = select(User).where(
+        User.tenant_id == payload.tenant,
+        User.email == payload.email.lower(),
+        User.is_active == True,  # noqa: E712
+    )
+    user = (await db.execute(q)).scalar_one_or_none()
+    if not user or not verify_password(payload.password, user.password_hash):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
-    if not verify_password(password, user.password_hash):
-        return None, {"code": "AUTH.INVALID_CREDENTIALS", "message": "Invalid credentials.", "retryable": False}
+    token = await create_session(db, payload.tenant, user, request)
 
-    token = issue_token(tenant_id=tenant.id, user_id=user.id, email=user.email)
-    return token, {"tenant_id": tenant.id, "user_id": user.id, "email": user.email}
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "tenant_id": payload.tenant,
+        "user_id": user.user_id,
+        "trace_id": uuid.uuid4().hex,
+    }
+
+
+@router.get("/auth/whoami")
+async def whoami(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    authorization: Optional[str] = Header(default=None),
+):
+    # В security.require_bearer_user мы читаем request.headers, так что Header-параметр
+    # тут нужен только чтобы OpenAPI явно показывал, что хедер используется.
+    _ = authorization
+
+    tenant_id, user = await __require(db, request)
+
+    return {
+        "tenant_id": tenant_id,
+        "user_id": user.user_id,
+        "email": user.email,
+        "role": user.role,
+        "trace_id": uuid.uuid4().hex,
+    }
+
+
+async def __require(db: AsyncSession, request: Request):
+    # обёртка, чтобы не тащить require_bearer_user в OpenAPI как dependency
+    from app.security import require_bearer_user
+
+    return await require_bearer_user(db, request)
