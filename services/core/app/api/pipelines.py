@@ -1,39 +1,52 @@
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import uuid4
 
-import sqlalchemy as sa
-from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, Field
+from app.db import get_db
+from app.models import Pipeline
+from app.security import require_bearer_user
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.db import get_db
-from app.models import Pipeline, Stage
-from app.security import require_bearer_user
 
 router = APIRouter(tags=["pipelines"])
 
 
 class PipelineCreate(BaseModel):
-    name: str = Field(min_length=1, max_length=200)
+    name: str
 
 
-class StageCreate(BaseModel):
-    name: str = Field(min_length=1, max_length=200)
-    sort_order: int | None = Field(default=None, ge=1)
-    is_won: bool = False
-    is_lost: bool = False
+class PipelineOut(BaseModel):
+    # ВАЖНО: чтобы response_model мог читать поля из SQLAlchemy ORM-объекта
+    model_config = ConfigDict(from_attributes=True)
+
+    pipeline_id: str
+    tenant_id: str
+    name: str
+    created_at: datetime
+    updated_at: datetime
 
 
-@router.post("/pipelines")
-async def create_pipeline(payload: PipelineCreate, request: Request, db: AsyncSession = Depends(get_db)):
+@router.post(
+    "/pipelines", response_model=PipelineOut, status_code=status.HTTP_201_CREATED
+)
+async def create_pipeline(
+    payload: PipelineCreate, request: Request, db: AsyncSession = Depends(get_db)
+):
     tenant_id, _user = await require_bearer_user(db, request)
+
+    name = (payload.name or "").strip()
+    if not name:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="name is required"
+        )
 
     obj = Pipeline(
         pipeline_id=f"pl_{uuid4().hex}",
         tenant_id=tenant_id,
-        name=payload.name,
+        name=name,
     )
     db.add(obj)
     await db.commit()
@@ -41,11 +54,14 @@ async def create_pipeline(payload: PipelineCreate, request: Request, db: AsyncSe
     return obj
 
 
-@router.get("/pipelines")
-async def list_pipelines(request: Request, db: AsyncSession = Depends(get_db), limit: int = 50, offset: int = 0):
+@router.get("/pipelines", response_model=list[PipelineOut])
+async def list_pipelines(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
     tenant_id, _user = await require_bearer_user(db, request)
-    limit = max(1, min(200, limit))
-    offset = max(0, offset)
 
     q = (
         select(Pipeline)
@@ -54,51 +70,22 @@ async def list_pipelines(request: Request, db: AsyncSession = Depends(get_db), l
         .limit(limit)
         .offset(offset)
     )
-    return (await db.execute(q)).scalars().all()
+    rows = (await db.execute(q)).scalars().all()
+    return list(rows)
 
 
-@router.post("/pipelines/{pipeline_id}/stages")
-async def create_stage(pipeline_id: str, payload: StageCreate, request: Request, db: AsyncSession = Depends(get_db)):
+@router.get("/pipelines/{pipeline_id}", response_model=PipelineOut)
+async def get_pipeline(
+    pipeline_id: str, request: Request, db: AsyncSession = Depends(get_db)
+):
     tenant_id, _user = await require_bearer_user(db, request)
 
-    pipe = (await db.execute(
-        select(Pipeline).where(Pipeline.tenant_id == tenant_id, Pipeline.pipeline_id == pipeline_id)
-    )).scalar_one_or_none()
-    if not pipe:
-        raise HTTPException(status_code=404, detail="Pipeline not found")
-
-    if payload.sort_order is None:
-        q = select(sa.func.coalesce(sa.func.max(Stage.sort_order), 0)).where(
-            Stage.tenant_id == tenant_id,
-            Stage.pipeline_id == pipeline_id,
+    q = select(Pipeline).where(
+        Pipeline.tenant_id == tenant_id, Pipeline.pipeline_id == pipeline_id
+    )
+    obj = (await db.execute(q)).scalar_one_or_none()
+    if not obj:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline not found"
         )
-        max_so = (await db.execute(q)).scalar_one()
-        sort_order = int(max_so) + 1
-    else:
-        sort_order = payload.sort_order
-
-    obj = Stage(
-        stage_id=f"st_{uuid4().hex}",
-        tenant_id=tenant_id,
-        pipeline_id=pipeline_id,
-        name=payload.name,
-        sort_order=sort_order,
-        is_won=payload.is_won,
-        is_lost=payload.is_lost,
-    )
-    db.add(obj)
-    await db.commit()
-    await db.refresh(obj)
     return obj
-
-
-@router.get("/pipelines/{pipeline_id}/stages")
-async def list_stages(pipeline_id: str, request: Request, db: AsyncSession = Depends(get_db)):
-    tenant_id, _user = await require_bearer_user(db, request)
-
-    q = (
-        select(Stage)
-        .where(Stage.tenant_id == tenant_id, Stage.pipeline_id == pipeline_id)
-        .order_by(Stage.sort_order.asc(), Stage.created_at.asc())
-    )
-    return (await db.execute(q)).scalars().all()
