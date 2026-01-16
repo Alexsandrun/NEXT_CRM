@@ -18,18 +18,22 @@ services:
     restart: unless-stopped
 
   core:
-    image: python:3.12-slim
+    build: ./services/core
     container_name: nextcrm-core
     working_dir: /app
     volumes:
       - ./services/core:/app
     environment:
-      - ENV=${ENV:-dev}
-      - LOG_MODE=${LOG_MODE:-normal}
-      - SERVICE_NAME=core
-      - POSTGRES_DSN=${POSTGRES_DSN}
-      - REDIS_URL=${REDIS_URL}
-    command: bash -lc "pip install -r requirements.txt && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+      ENV: ${ENV:-dev}
+      LOG_MODE: ${LOG_MODE:-normal}
+      SERVICE_NAME: core
+      APP_VERSION: 0.1.0-dev
+      GIT_SHA: dev
+      POSTGRES_DSN: ${POSTGRES_DSN}
+      REDIS_URL: ${REDIS_URL}
+    command: bash -lc "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --no-access-log"
     depends_on:
       postgres:
         condition: service_healthy
@@ -46,18 +50,20 @@ services:
     restart: unless-stopped
 
   content:
-    image: python:3.12-slim
+    build: ./services/content
     container_name: nextcrm-content
     working_dir: /app
     volumes:
       - ./services/content:/app
       - nextcrm_contentdata:/data
     environment:
-      - ENV=${ENV:-dev}
-      - LOG_MODE=${LOG_MODE:-normal}
-      - SERVICE_NAME=content
-      - CONTENT_DATA_DIR=/data
-    command: bash -lc "pip install -r requirements.txt && uvicorn app.main:app --host 0.0.0.0 --port 8001"
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+      ENV: ${ENV:-dev}
+      LOG_MODE: ${LOG_MODE:-normal}
+      SERVICE_NAME: content
+      CONTENT_DATA_DIR: /data
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8001 --no-access-log
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=2).read()"]
       interval: 5s
@@ -69,17 +75,19 @@ services:
     restart: unless-stopped
 
   runner:
-    image: python:3.12-slim
+    build: ./services/runner
     container_name: nextcrm-runner
     working_dir: /app
     volumes:
       - ./services/runner:/app
     environment:
-      - ENV=${ENV:-dev}
-      - LOG_MODE=${LOG_MODE:-normal}
-      - SERVICE_NAME=runner
-      - REDIS_URL=${REDIS_URL}
-    command: bash -lc "pip install -r requirements.txt && python -m app"
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+      ENV: ${ENV:-dev}
+      LOG_MODE: ${LOG_MODE:-normal}
+      SERVICE_NAME: runner
+      REDIS_URL: ${REDIS_URL}
+    command: python -m app
     depends_on:
       redis:
         condition: service_healthy
