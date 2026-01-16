@@ -5,17 +5,20 @@ from fastapi import FastAPI
 
 from app.api.router import api_router
 
-app = FastAPI(title="NEXT_CRM Core", version="0.1.0-dev")
+APP_ENV = os.getenv("ENV", "dev")
+LOG_MODE = os.getenv("LOG_MODE", "normal")
+APP_VERSION = os.getenv("APP_VERSION", "0.1.0-dev")
+GIT_SHA = os.getenv("GIT_SHA", "dev")
+
+app = FastAPI(title="NextCRM Core", version=APP_VERSION)
+app.include_router(api_router)
+
 
 @app.get("/health")
 def health():
-    return {
-        "status": "ok",
-        "service": "core",
-        "env": os.getenv("APP_ENV", "dev"),
-        "log_mode": os.getenv("LOG_MODE", "normal"),
-    }
+    return {"status": "ok", "service": "core", "env": APP_ENV, "log_mode": LOG_MODE}
 
-# core internal routes (no /api prefix here; gateway strips /api/)
-app.include_router(api_router)
-# END_FILE
+
+@app.get("/version")
+def version():
+    return {"service": "core", "env": APP_ENV, "version": APP_VERSION, "git_sha": GIT_SHA}
