@@ -1,26 +1,32 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BASE="${BASE:-http://localhost:8088}"
+BASE_URL="${BASE_URL:-http://localhost:8088}"
 
 echo "== health =="
-curl -sS "$BASE/api/health"; echo; echo
+curl -fsS "${BASE_URL}/api/health"
+echo -e "\n"
 
 echo "== version =="
-curl -sS "$BASE/api/version"; echo; echo
+curl -fsS "${BASE_URL}/api/version"
+echo -e "\n"
 
 echo "== bootstrap =="
-BOOTSTRAP="$(curl -sS -X POST "$BASE/api/bootstrap")"
-echo "$BOOTSTRAP"; echo; echo
+curl -fsS -X POST "${BASE_URL}/api/bootstrap"
+echo -e "\n\n"
 
 echo "== login =="
-LOGIN="$(curl -sS -X POST "$BASE/api/auth/login" \
+login_json="$(curl -fsS -X POST "${BASE_URL}/api/auth/login" \
   -H 'Content-Type: application/json' \
   -d '{"tenant":"demo","email":"admin@demo.local","password":"admin123"}')"
-echo "$LOGIN"; echo; echo
+echo "${login_json}"
+echo -e "\n"
 
-TOKEN="$(printf '%s' "$LOGIN" | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')"
-echo "token=$TOKEN"; echo; echo
+token="$(python -c 'import json,sys; print(json.loads(sys.stdin.read())["access_token"])' <<<"${login_json}")"
+
+echo "token=${token}"
+echo -e "\n"
 
 echo "== whoami =="
-curl -sS "$BASE/api/auth/whoami" -H "Authorization: Bearer $TOKEN"; echo
+curl -fsS "${BASE_URL}/api/auth/whoami" -H "Authorization: Bearer ${token}"
+echo -e "\n"

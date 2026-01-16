@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import os
-from fastapi import FastAPI
 
-from app.api.router import api_router
+from app.api.router import api_router as api_router
+from fastapi import FastAPI
 
 APP_ENV = os.getenv("ENV", "dev")
 LOG_MODE = os.getenv("LOG_MODE", "normal")
@@ -21,4 +21,9 @@ def health():
 
 @app.get("/version")
 def version():
-    return {"service": "core", "env": APP_ENV, "version": APP_VERSION, "git_sha": GIT_SHA}
+    return {
+        "service": "core",
+        "env": APP_ENV,
+        "version": APP_VERSION,
+        "git_sha": GIT_SHA,
+    }

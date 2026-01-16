@@ -1,10 +1,12 @@
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
 
-# DB (async)
-SQLAlchemy==2.0.36
-asyncpg==0.30.0
+# DB + migrations
+sqlalchemy==2.0.37
+psycopg[binary]==3.2.3
+asyncpg==0.29.0
+alembic==1.13.2
 
-# Auth
-PyJWT==2.10.1
+# Auth/password hashing
 passlib[bcrypt]==1.7.4
+bcrypt==4.1.3
