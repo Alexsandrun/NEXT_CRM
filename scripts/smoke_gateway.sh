@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# включи TRACE=1 в CI/локально, если нужен подробный трейс
+# включи TRACE=1 если нужен подробный трейс
 if [[ "${TRACE:-0}" == "1" ]]; then
   set -x
 fi
@@ -82,9 +82,7 @@ done
 echo "== openapi has board endpoint =="
 for i in {1..60}; do
   code="$(curl -sS -o /tmp/openapi.json -w "%{http_code}" "$BASE/api/openapi.json" || true)"
-  if [[ "$code" == "200" ]]; then
-    break
-  fi
+  [[ "$code" == "200" ]] && break
   echo "wait openapi... ($i) http=$code"
   sleep 1
   [[ "$i" == "60" ]] && die "openapi didn't become 200"
@@ -120,32 +118,26 @@ DEAL="$(printf '%s' "$deal_json" | python3 -c 'import json,sys; print(json.load(
 
 echo "== board request (include_empty=true) =="
 board_json="$(curl_json GET "$BASE/api/pipelines/$PIPELINE_ID/board?include_empty=true" "${auth[@]}")"
-echo "DEBUG: board_json response:" >&2
-printf '%s\n' "$board_json" >&2
-printf '%s' "$board_json" | python3 - <<PY
-import json,sys
-b=json.load(sys.stdin)
-assert "columns" in b, "no 'columns' in board"
-assert len(b["columns"]) >= 2, "expected at least 2 columns"
-print("board OK, columns=", len(b["columns"]))
-PY
+[[ -n "$board_json" ]] || die "board response is empty"
+printf '%s' "$board_json" | python3 -c 'import json,sys; b=json.load(sys.stdin); assert "columns" in b, "no columns"; assert len(b["columns"])>=2, "expected >=2 columns"; print("board OK, columns=", len(b["columns"]))'
 
 echo "== move deal to Won (PATCH) =="
 curl_json PATCH "$BASE/api/deals/$DEAL" --data "{\"stage_id\":\"$ST2\"}" "${auth[@]}" >/dev/null
 
 echo "== board after move =="
 board2="$(curl_json GET "$BASE/api/pipelines/$PIPELINE_ID/board?include_empty=true" "${auth[@]}")"
-printf '%s' "$board2" | python3 - <<PY
-import json,sys
+[[ -n "$board2" ]] || die "board(after move) response is empty"
+printf '%s' "$board2" | DEAL_ID="$DEAL" WON_ID="$ST2" python3 -c '
+import os,json,sys
 b=json.load(sys.stdin)
-deal_id = "$DEAL"
-won_id = "$ST2"
-for col in b.get("columns",[]):
-  if col.get("stage",{}).get("stage_id")==won_id:
-    if any(d.get("deal_id")==deal_id for d in col.get("deals",[])):
-      print("move OK")
-      raise SystemExit(0)
+deal_id=os.environ["DEAL_ID"]
+won_id=os.environ["WON_ID"]
+for col in b.get("columns", []):
+    if col.get("stage", {}).get("stage_id") == won_id:
+        if any(d.get("deal_id") == deal_id for d in col.get("deals", [])):
+            print("move OK")
+            raise SystemExit(0)
 raise SystemExit("moved deal not found in Won column")
-PY
+'
 
 echo "ALL SMOKE CHECKS PASSED"
