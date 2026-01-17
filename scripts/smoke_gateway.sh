@@ -120,6 +120,8 @@ DEAL="$(printf '%s' "$deal_json" | python3 -c 'import json,sys; print(json.load(
 
 echo "== board request (include_empty=true) =="
 board_json="$(curl_json GET "$BASE/api/pipelines/$PIPELINE_ID/board?include_empty=true" "${auth[@]}")"
+echo "DEBUG: board_json response:" >&2
+printf '%s\n' "$board_json" >&2
 printf '%s' "$board_json" | python3 - <<PY
 import json,sys
 b=json.load(sys.stdin)
