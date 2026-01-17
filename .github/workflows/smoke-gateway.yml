@@ -13,21 +13,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Smoke (no chmod, run via bash)
-        shell: bash
-        env:
-          BASE: http://127.0.0.1:8088
+      - name: Docker info
         run: |
-          set -euo pipefail
-          if [[ -f ./scripts/smoke_gateway.sh ]]; then
-            bash ./scripts/smoke_gateway.sh
-          elif [[ -f ./scripts/smoke-gateway.sh ]]; then
-            bash ./scripts/smoke-gateway.sh
-          else
-            echo "Smoke script not found in ./scripts" >&2
-            ls -la ./scripts || true
-            exit 1
-          fi
+          docker version
+          docker compose version
+
+      - name: Up (core/content/gateway)
+        run: |
+          docker compose up -d --build postgres redis core content gateway
+          docker compose ps
+
+      - name: Smoke
+        run: bash ./scripts/smoke_gateway.sh
 
       - name: Dump compose logs (on failure)
         if: failure()
