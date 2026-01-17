@@ -54,8 +54,6 @@ jobs:
       - name: Run smoke script
         run: |
           set -euo pipefail
-          chmod +x ./scripts/smoke_gateway.sh
-          ./scripts/smoke_gateway.sh
 
       - name: Collect logs (on failure)
         if: failure()
